@@ -1,35 +1,27 @@
 ---
 name: intestinal-organoid-cell-annotation
-description: Annotate intestinal epithelial organoid scRNA-seq clusters, including IBD and control organoids, from marker programs, expression prevalence, QC, lineage context, and cell states. Use for assigning or reviewing cluster labels; do not use for unrelated downstream pathway or differential-expression analysis.
+description: 从已完成聚类的肠道类器官 scRNA-seq 数据进行完整细胞注释：样本构成、COSG marker、表达比例、谱系与状态判读、稀有群复核、celltype_v1 映射和统一图表验证。适用于 IBD 与对照类器官。
 ---
 
-# Intestinal organoid cell annotation
+# 肠道类器官 scRNA-seq 聚类后注释
 
-Annotate clusters with an auditable evidence table. Treat lineage identity, differentiation stage, and transient state as separate axes. A single marker, reference-mapping label, or cluster rank is insufficient evidence.
+从**已有 cluster** 开始。目标是形成可追溯的 `cluster → 谱系 / 分化阶段 / 状态 → marker 证据 → 置信度`，再保存 `celltype_v1`。不要从输入、过滤或 QC 全流程重新开始，除非用户另行要求；仅在可疑小群中回查已有 QC 指标。
 
-## Inputs
+## 操作顺序
 
-Use a clustered AnnData object or equivalent tables with: cluster assignment, sample/donor and condition, normalized expression for visualization, uncorrected counts for QC and appropriate statistical tests, per-cluster marker results, and cell-level QC/doublet information. Ask for missing essentials if they prevent a defensible label. Record species, intestinal region, culture conditions, integration method, clustering resolution, and the expression layer used for each analysis; these affect marker interpretation.
+完整执行 [聚类后工作流](references/post-clustering-workflow.md)：
 
-## Workflow
+1. 统计每个 cluster 的细胞数、sample 和 Dis/Ctrl 构成，先识别样本偏倚，不据此直接命名或宣称疾病特异。
+2. 用 **COSG** 在 counts 层找每群 marker；先看 top 10，再看 top 30，并在全基因对象上补查。结合 raw counts mean、`pct_expressed` 和经典肠上皮 marker。原项目明确选择**不用 Wilcoxon**；不要把它偷偷加为必做步骤。
+3. 按 [marker 判别参考](references/marker-evidence.md) 逐群比较：先谱系，再分化阶段，最后加 cycling、再生、代谢、应激或炎症状态。每群必须写最强替代解释。
+4. 单独核对 cell-cycle scoring、相邻吸收/分泌群以及样本集中的稀有群。混合 marker 时先看是否为同细胞共表达或潜在 multiplet。
+5. 形成 cluster 映射，写入新列 `celltype_v1`；用 marker dotplot/heatmap、UMAP 和按样本图验证，统一标签顺序与颜色。参考映射仅作第二层验证。
+6. 注释完成后才画 sample 与 condition 的组成图；疾病比较优先按 sample 作为分析单位，不从 pooled cell proportion 直接作统计结论。
 
-1. **Check technical validity.** Review cells per cluster, genes/UMIs, mitochondrial fraction, doublet calls, and sample contribution. Flag clusters driven by one sample, low quality, ambient RNA, or mixed incompatible lineage markers. Revisit broad epithelial identity before fine labels if non-epithelial cells may remain.
-2. **Discover cluster markers.** Obtain positive and depleted markers with effect size, detection fraction inside and outside the cluster, and statistical support. COSG can prioritize specific markers, as used in the source workflow; cross-check with a conventional differential-expression method rather than treating either ranking as ground truth. Use the appropriate expression representation and biological replicates for the question.
-3. **Evaluate programs.** Compare coherent sets of positive markers, expected absent or low markers, expression prevalence, and specificity across neighboring clusters. Inspect dot plots, heatmaps, and per-gene distributions; distinguish a cluster-wide program from a few outlier cells. Consult [marker evidence](references/marker-evidence.md) for candidate programs and ambiguities.
-4. **Place clusters in context.** Assign a broad epithelial lineage, then differentiation stage and state. Interpret stem, cycling transit-amplifying, absorptive, and secretory programs alongside stress, inflammatory, metabolic, and cell-cycle programs. Do not treat a state as a new lineage without independent evidence. A proposed developmental ordering is a hypothesis unless supported by trajectory or lineage evidence.
-5. **Check alternatives.** Compare each proposed label with its nearest plausible alternatives and write down the discriminating evidence. Review reference mapping as corroboration, especially when the reference differs in organ, culture, disease, or developmental context.
-6. **Validate and report.** Produce a per-cluster evidence table with candidate and alternative labels, positive and negative markers, detection fractions, QC/sample support, confidence, and unresolved questions. Show a marker dot plot or heatmap and an embedding colored by labels, QC, and sample. Check label stability across sensible clustering resolutions and donors when data allow. Use condition proportions only after accounting for sample/donor effects.
+## 边界与交付
 
-## Decision rules
-
-- Prefer a descriptive provisional label when evidence is mixed. State what would resolve it.
-- Separate S-phase and G2/M cycling subclusters only when cell-cycle scores and markers support that distinction; keep their shared TA identity explicit.
-- For small or rare clusters, verify marker coherence, QC, doublets, and sample reproducibility before making a biological claim. Do not use a universal cell-count cutoff as proof of validity; the source example's 10-cell rare cluster was displayed but excluded from central conclusions.
-- Do not infer causality, differentiation direction, or disease specificity from an annotation alone. Disease/control comparisons require biological replicates and suitable statistics.
-- Save labels to a new versioned column (for example `celltype_v1`) and preserve original cluster IDs and previous labels. Do not overwrite the only copy of an AnnData object.
-
-## Output format
-
-Return: (1) a cluster-to-label table, (2) the evidence and strongest alternative for each cluster, (3) confidence and QC caveats, and (4) a short validation and next-step list. Distinguish observations from interpretation. If raw marker/QC evidence is unavailable, label the result as a proposed annotation plan rather than validated annotation.
-
-For the historical IBD organoid example, read [examples/ibd-organoid.md](examples/ibd-organoid.md). Its cluster IDs are specific to that conversation and have not been revalidated from source data here.
+- 单个 marker、COSG 排名、UMAP 位置、参考图标签或 pooled 组别比例均不足以独立命名。
+- 将谱系、分化阶段和细胞状态分别记录。图上的相邻关系不是已证实的发育轨迹。
+- 输出逐群证据表、最强替代解释、置信度、待复核点、`celltype_v1` 映射和复用同一 palette 的图。
+- 保留原 cluster 列和原对象；没有原始 marker 或细胞级数据时只给**候选注释**。
+- [IBD 项目实例](examples/ibd-organoid.md)记录旧对话的 0–13 群、实际数值与配色。编号只适用于该次 Leiden 0.8 聚类，不可套用到新数据。
